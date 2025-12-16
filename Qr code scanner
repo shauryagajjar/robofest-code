@@ -1,0 +1,39 @@
+import cv2
+from pyzbar.pyzbar import decode
+
+def main():
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        codes = decode(frame)
+        action = "NONE"
+
+        for qr in codes:
+            data = qr.data.decode('utf-8').upper()
+            action = data
+            pts = qr.polygon
+            cv2.polylines(frame, [pts], True, (0,255,0), 3)
+
+        cv2.putText(frame, f"Action: {action}",
+                    (20, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0,255,255), 3)
+
+        cv2.imshow("QR Mission", frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
+
+
+
