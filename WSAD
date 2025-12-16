@@ -1,0 +1,88 @@
+import sys
+import tty
+import termios
+import RPi.GPIO as GPIO
+import time
+
+# -------- GPIO SETUP --------
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+ENA, IN1, IN2 = 13, 5, 6
+ENB, IN3, IN4 = 12, 16, 19
+
+for p in [ENA, IN1, IN2, ENB, IN3, IN4]:
+    GPIO.setup(p, GPIO.OUT)
+
+pwmA = GPIO.PWM(ENA, 1000)
+pwmB = GPIO.PWM(ENB, 1000)
+pwmA.start(0)
+pwmB.start(0)
+
+SPEED = 70
+
+# -------- MOTOR FUNCTIONS --------
+def stop():
+    pwmA.ChangeDutyCycle(0)
+    pwmB.ChangeDutyCycle(0)
+
+def forward():
+    GPIO.output(IN1,1); GPIO.output(IN2,0)
+    GPIO.output(IN3,1); GPIO.output(IN4,0)
+    pwmA.ChangeDutyCycle(SPEED)
+    pwmB.ChangeDutyCycle(SPEED)
+
+def left():
+    GPIO.output(IN1,1); GPIO.output(IN2,0)
+    GPIO.output(IN3,1); GPIO.output(IN4,0)
+    pwmA.ChangeDutyCycle(SPEED)
+    pwmB.ChangeDutyCycle(SPEED)
+
+def right():
+    GPIO.output(IN1,0); GPIO.output(IN2,1)
+    GPIO.output(IN3,0); GPIO.output(IN4,1)
+    pwmA.ChangeDutyCycle(SPEED)
+    pwmB.ChangeDutyCycle(SPEED)
+    
+def backward():
+    GPIO.output(IN1,0); GPIO.output(IN2,1)
+    GPIO.output(IN3,0); GPIO.output(IN4,1)
+    pwmA.ChangeDutyCycle(SPEED)
+    pwmB.ChangeDutyCycle(SPEED)
+
+# -------- KEYBOARD INPUT --------
+def getch():
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    return ch
+
+print("W=Forward | A=Left | D=Right | S=Stop | Q=Quit| X=Backward")
+
+try:
+    while True:
+        key = getch().lower()
+
+        if key == 'w':
+            forward()
+        elif key == 's':
+            backward()
+        elif key == 'x':
+            stop()
+        elif key == 'a':
+            left()
+        elif key == 'd':
+            right()
+        elif key == 'q':
+            break
+
+finally:
+    stop()
+    GPIO.cleanup()
+    print("\nExited safely")
+
+
