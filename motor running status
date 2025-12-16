@@ -1,0 +1,51 @@
+import RPi.GPIO as GPIO
+import time
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+# LEFT motors
+ENA = 13
+IN1 = 5
+IN2 = 6
+
+# RIGHT motors
+ENB = 12
+IN3 = 16
+IN4 = 19
+
+for pin in [ENA, IN1, IN2, ENB, IN3, IN4]:
+    GPIO.setup(pin, GPIO.OUT)
+
+pwmA = GPIO.PWM(ENA, 1000)
+pwmB = GPIO.PWM(ENB, 1000)
+pwmA.start(80)
+pwmB.start(80)
+
+# ---------- FORWARD ----------
+GPIO.output(IN1, 0)
+GPIO.output(IN2, 1)
+GPIO.output(IN3, 1)
+GPIO.output(IN4, 0)
+time.sleep(10)
+
+# ---------- BACKWARD ----------
+GPIO.output(IN1, 1)
+GPIO.output(IN2, 0)
+GPIO.output(IN3, 0)
+GPIO.output(IN4, 1)
+time.sleep(10)
+
+# ---------- STOP ----------
+GPIO.output(IN1, 0)
+GPIO.output(IN2, 0)
+GPIO.output(IN3, 0)
+GPIO.output(IN4, 0)
+
+pwmA.ChangeDutyCycle(0)
+pwmB.ChangeDutyCycle(0)
+
+GPIO.cleanup()
+print("Completed correctly")
+
+
