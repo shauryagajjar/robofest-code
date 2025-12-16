@@ -1,0 +1,118 @@
+import cv2
+import numpy as np
+import RPi.GPIO as GPIO
+import time
+
+# ---------------- GPIO SETUP ----------------
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+IN1, IN2, ENA = 5, 6, 13
+IN3, IN4, ENB = 16, 19, 12
+
+for p in (IN1, IN2, IN3, IN4, ENA, ENB):
+    GPIO.setup(p, GPIO.OUT)
+
+pwmA = GPIO.PWM(ENA, 1000)
+pwmB = GPIO.PWM(ENB, 1000)
+pwmA.start(0)
+pwmB.start(0)
+
+BASE_SPEED = 55
+TURN_SPEED = 40
+
+def forward():
+    GPIO.output(IN1,1); GPIO.output(IN2,0)
+    GPIO.output(IN3,1); GPIO.output(IN4,0)
+    pwmA.ChangeDutyCycle(BASE_SPEED)
+    pwmB.ChangeDutyCycle(BASE_SPEED)
+
+def left():
+    GPIO.output(IN1,0); GPIO.output(IN2,1)
+    GPIO.output(IN3,1); GPIO.output(IN4,0)
+    pwmA.ChangeDutyCycle(TURN_SPEED)
+    pwmB.ChangeDutyCycle(BASE_SPEED)
+
+def right():
+    GPIO.output(IN1,1); GPIO.output(IN2,0)
+    GPIO.output(IN3,0); GPIO.output(IN4,1)
+    pwmA.ChangeDutyCycle(BASE_SPEED)
+    pwmB.ChangeDutyCycle(TURN_SPEED)
+
+def stop():
+    pwmA.ChangeDutyCycle(0)
+    pwmB.ChangeDutyCycle(0)
+
+# ---------------- CAMERA + LANE ----------------
+def main():
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+    cap.set(3, 640)
+    cap.set(4, 480)
+
+    if not cap.isOpened():
+        print("Camera not opened")
+        return
+
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            h, w = frame.shape[:2]
+            roi_top = int(h * 0.6)
+            roi = frame[roi_top:h, :]
+
+            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+            _, binary = cv2.threshold(
+                blur, 0, 255,
+                cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            )
+            binary = 255 - binary
+
+            ys, xs = np.where(binary > 0)
+
+            if len(xs) > 0:
+                lane_x = int(np.mean(xs))
+                frame_x = w // 2
+                error = (lane_x - frame_x) / (w / 2)
+
+                if error < -0.1:
+                    left()
+                elif error > 0.1:
+                    right()
+                else:
+                    forward()
+
+                cv2.line(frame, (lane_x, roi_top),
+                         (lane_x, h), (0,255,0), 2)
+                cv2.line(frame, (frame_x, 0),
+                         (frame_x, h), (0,0,255), 2)
+
+                cv2.putText(frame, f"Error: {error:.2f}",
+                            (20,40), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.8, (0,255,255), 2)
+            else:
+                stop()
+                cv2.putText(frame, "Lane Lost",
+                            (20,40), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.8, (0,0,255), 2)
+
+            cv2.imshow("Lane View", frame)
+            cv2.imshow("Binary ROI", binary)
+
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+    finally:
+        stop()
+        cap.release()
+        cv2.destroyAllWindows()
+        GPIO.cleanup()
+
+if __name__ == "__main__":
+    main()
+q
+
