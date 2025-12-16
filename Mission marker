@@ -1,0 +1,99 @@
+import cv2
+import numpy as np
+from pyzbar.pyzbar import decode
+
+# ARUCO Setup
+arucoDict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
+arucoParams = cv2.aruco.DetectorParameters_create()
+
+def detect_aruco(frame):
+    corners, ids, _ = cv2.aruco.detectMarkers(frame, arucoDict, parameters=arucoParams)
+    if ids is not None:
+        cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+        return ids[0][0]  # return first ID
+    return None
+
+def detect_qr(frame):
+    decoded = decode(frame)
+    if decoded:
+        data = decoded[0].data.decode('utf-8')
+        points = decoded[0].polygon
+        pts = [tuple(pt) for pt in points]
+        cv2.polylines(frame, [np.array(pts)], True, (0,255,0), 3)
+        return data
+    return None
+
+def detect_color_shapes(frame):
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # Thresholds for Red, Green, Blue
+    ranges = {
+        "RED": ([0, 70, 70], [10, 255, 255]),
+        "GREEN": ([40, 70, 70], [80, 255, 255]),
+        "BLUE": ([100, 150, 0], [140, 255, 255])
+    }
+
+    for color, (lower, upper) in ranges.items():
+        mask = cv2.inRange(hsv, np.array(lower), np.array(upper))
+        contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area > 1000:   # Ignore small noise
+                peri = cv2.arcLength(cnt, True)
+                approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+                
+                if len(approx) > 8:
+                    shape = "CIRCLE"
+                elif len(approx) == 3:
+                    shape = "TRIANGLE"
+                elif len(approx) == 4:
+                    shape = "SQUARE"
+                else:
+                    shape = "UNKNOWN"
+
+                return f"{color}_{shape}"
+    return None
+
+def main():
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        action = "NONE"
+
+        # 1?? ARUCO detection
+        aruco_id = detect_aruco(frame)
+        if aruco_id is not None:
+            action = f"ARUCO_{aruco_id}"
+
+        # 2?? QR code detection
+        qr_data = detect_qr(frame)
+        if qr_data:
+            action = f"QR_{qr_data}"
+
+        # 3?? Color-shape detection
+        shape_data = detect_color_shapes(frame)
+        if shape_data:
+            action = shape_data
+
+        # Display action status
+        cv2.putText(frame, f"Action: {action}", (20,50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 3)
+
+        cv2.imshow("Mission Marker Camera", frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
+
+
+
