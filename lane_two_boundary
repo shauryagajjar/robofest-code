@@ -1,0 +1,98 @@
+import cv2
+import numpy as np
+
+def main():
+    # Open USB camera
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+    if not cap.isOpened():
+        print("Camera not opened")
+        return
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Frame not received")
+            break
+
+        height, width = frame.shape[:2]
+
+        # ----- 1) Take only bottom 40% of the image (Region Of Interest) -----
+        roi_top = int(height * 0.6)
+        roi = frame[roi_top:height, :]
+
+        # ----- 2) Convert to grayscale + blur -----
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        # ----- 3) Threshold to get the lane line -----
+        # Assuming dark line on light floor. If opposite, remove the 255 - binary.
+        _, binary = cv2.threshold(
+            blur, 0, 255,
+            cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        )
+        binary = 255 - binary  # invert so lane is white
+
+        # ----- 4) Find x-position of lane using non-zero pixels -----
+        ys, xs = np.where(binary > 0)  # coords of lane pixels
+
+        lane_center_x = None
+        error_norm = 0.0
+
+        if len(xs) > 0:
+            lane_center_x = int(np.mean(xs))
+            frame_center_x = width // 2
+            error_pixels = lane_center_x - frame_center_x
+            # normalised error between -1 and 1
+            error_norm = error_pixels / (width / 2)
+
+            # Draw lane center (green) and frame center (red)
+            cv2.line(frame, (lane_center_x, roi_top),
+                     (lane_center_x, height), (0, 255, 0), 2)
+            cv2.line(frame, (frame_center_x, 0),
+                     (frame_center_x, height), (0, 0, 255), 2)
+
+            direction_text = "CENTER"
+            if error_norm < -0.1:
+                direction_text = "TURN LEFT"
+            elif error_norm > 0.1:
+                direction_text = "TURN RIGHT"
+
+            cv2.putText(
+                frame,
+                f"Lane Error: {error_norm:.2f}  {direction_text}",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 255),
+                2,
+            )
+        else:
+            cv2.putText(
+                frame,
+                "Lane NOT found",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 0, 255),
+                2,
+            )
+
+        # Show windows
+        cv2.imshow("Lane - Original", frame)
+        cv2.imshow("Lane - Binary ROI", binary)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
+
+
+
