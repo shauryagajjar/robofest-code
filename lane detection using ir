@@ -1,0 +1,76 @@
+import RPi.GPIO as GPIO
+import time
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+# ---------------- Motor pins ----------------
+ENA = 13
+IN1 = 5
+IN2 = 6
+ENB = 12
+IN3 = 16
+IN4 = 19
+# ---------------- Sensor pins (DO) ----------------
+LEFT_SENSOR  = 20   # 1 = black, 0 = white  (as per your observation)
+RIGHT_SENSOR = 21
+# ---------------- GPIO setup ----------------
+for pin in [ENA, IN1, IN2, ENB, IN3, IN4]:
+    GPIO.setup(pin, GPIO.OUT)
+GPIO.setup(LEFT_SENSOR, GPIO.IN)
+GPIO.setup(RIGHT_SENSOR, GPIO.IN)
+# ---------------- PWM setup ----------------
+pwmA = GPIO.PWM(ENA, 500)
+pwmB = GPIO.PWM(ENB, 500)
+pwmA.start(100)   # FULL power for torque
+pwmB.start(100)
+#def high_speed():
+	#pwmA = GPIO.PWM(ENA, 1000)
+	#pwmB = GPIO.PWM(ENB, 1000)
+def norm_speed():
+	pwmA = GPIO.PWM(ENA, 500)
+	pwmB = GPIO.PWM(ENB, 500)
+# ---------------- Motor functions ----------------
+def forward():
+    pwmA.ChangeDutyCycle(100)
+    pwmB.ChangeDutyCycle(100)
+    GPIO.output(IN1,0); GPIO.output(IN2,1)
+    GPIO.output(IN3,1); GPIO.output(IN4,0)
+def turn_left():
+    pwmA.ChangeDutyCycle(50)    # left slower
+    pwmB.ChangeDutyCycle(100)   # right fast
+    GPIO.output(IN1,1); GPIO.output(IN2,0)
+    GPIO.output(IN3,1); GPIO.output(IN4,0)
+def turn_right():
+    pwmA.ChangeDutyCycle(100)
+    pwmB.ChangeDutyCycle(50)
+    GPIO.output(IN1,1); GPIO.output(IN2,0)
+    GPIO.output(IN3,1); GPIO.output(IN4,0)
+def stop():
+   # pwmA.ChangeDutyCycle(0)
+  #  pwmB.ChangeDutyCycle(0)
+    GPIO.output(IN1,0); GPIO.output(IN2,0)
+    GPIO.output(IN3,0); GPIO.output(IN4,0)
+# ---------------- Main loop ----------------
+try:
+    while True:
+        L = GPIO.input(LEFT_SENSOR)
+        R = GPIO.input(RIGHT_SENSOR)
+        print(f"L: {L}  R: {R}")
+        # BOTH sensors on BLACK ? go forward
+        if L == 0 and R == 0:
+           #high_speed()
+           forward()
+        # LEFT on BLACK, RIGHT on WHITE ? drift right ? correct right
+        elif L == 1 and R == 0:
+			#norm_speed()
+            turn_right()
+        # RIGHT on BLACK, LEFT on WHITE ? drift left ? correct left
+        elif L == 0 and R == 1:
+			#norm_speed()
+            turn_left()
+        # BOTH on WHITE ? lost lane
+        else:
+            stop()
+        time.sleep(0.01)
+finally:
+    stop()
+    GPIO.cleanup()
